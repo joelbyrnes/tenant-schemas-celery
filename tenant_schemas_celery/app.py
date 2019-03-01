@@ -1,5 +1,9 @@
 from __future__ import absolute_import
 
+import logging
+
+from django.conf import settings
+
 try:
     import celery
     from celery import Celery
@@ -10,12 +14,16 @@ from django.db import connection
 
 from celery.signals import task_prerun, task_postrun
 
+logger = logging.getLogger(__name__)
+
+
+def settings_use_kwargs():
+    return getattr(settings, 'TENANT_SCHEMAS_CELERY_USE_KWARGS', False)
+
 
 def get_schema_name_from_task(task, kwargs):
-    if celery.VERSION[0] < 4:
-        # Pop it from the kwargs since tasks don't except the additional kwarg.
-        # This change is transparent to the system.
-        return kwargs.pop('_schema_name', None)
+    if celery.VERSION[0] < 4 or settings_use_kwargs():
+        return kwargs.get('_schema_name', None)
 
     # In some cases (like Redis broker) headers are merged with `task.request`.
     task_headers = task.request.headers or task.request
@@ -36,6 +44,11 @@ def switch_schema(task, kwargs, **kw):
         get_schema_name_from_task(task, kwargs) or
         get_public_schema_name()
     )
+    logger.debug("Switch schema of task {} to {}".format(task.name, schema))
+
+    # Pop it from the kwargs since tasks don't except the additional kwarg.
+    # This change is transparent to the system.
+    kwargs.pop('_schema_name', None)
 
     # If the schema has not changed, don't do anything.
     if connection.schema_name == schema:

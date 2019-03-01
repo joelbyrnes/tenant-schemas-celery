@@ -2,6 +2,8 @@ import celery
 from celery.app.task import Task
 from django.db import connection
 
+from tenant_schemas_celery.app import settings_use_kwargs
+
 
 class TenantTask(Task):
     """ Custom Task class that injects db schema currently used to the task's
@@ -17,7 +19,7 @@ class TenantTask(Task):
         kwds['_schema_name'] = kwds.get('_schema_name', connection.schema_name)
 
     def apply_async(self, args=None, kwargs=None, *arg, **kw):
-        if celery.VERSION[0] < 4:
+        if celery.VERSION[0] < 4 or settings_use_kwargs():
             kwargs = kwargs or {}
             self._add_current_schema(kwargs)
 
@@ -27,7 +29,7 @@ class TenantTask(Task):
         return super(TenantTask, self).apply_async(args, kwargs, *arg, **kw)
 
     def apply(self, args=None, kwargs=None, *arg, **kw):
-        if celery.VERSION[0] < 4:
+        if celery.VERSION[0] < 4 or settings_use_kwargs():
             kwargs = kwargs or {}
             self._add_current_schema(kwargs)
 
